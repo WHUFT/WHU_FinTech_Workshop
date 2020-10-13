@@ -25,7 +25,7 @@
 
 这一部分主要是本科生研讨班，主要是帮助新进成员/本科生掌握编程和资产定价研究的基本方法。所有内容的代码实现采用Python语言。主要包括如下三部分，分别从秋季学期到春季学期：
 
-1. [金融数据科学(Financial Data Science)](11-金融数据科学/README.md)
-2. [统计机器学习(Statistical Machine Learning)](12-统计机器学习/README.md)
-3. [实证资产定价(Empirial Asset Pricing)](13-实证资产定价/README.md) 
+1. [金融数据科学(Financial Data Science)](10-研究方法学习班/11-金融数据科学/README.md)
+2. [统计机器学习(Statistical Machine Learning)](10-研究方法学习班/12-统计机器学习/README.md)
+3. [实证资产定价(Empirial Asset Pricing)](10-研究方法学习班/13-实证资产定价/README.md) 
 
