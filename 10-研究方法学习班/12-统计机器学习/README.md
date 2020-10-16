@@ -1,7 +1,3 @@
-# Empirial_Asset_Pricing_Python
+# 统计机器学习(Statistical Machine Learning)
 
-This repository main implements the book titled "Empirical Asset Pricing: The Cross Section of Stock Returns" by Bali, Engle, and Murray, 2016.
-
-Besides the cross sectional return parts above, we also implement some time series prediciton. Related papers are attached. 
-
-
+运用Python实现书籍Hastie, T., R. Tibshirani, and J. Friedman. 2009. The Elements of Statistical Learning: Data Mining, Inference, and Prediction. Springer.
