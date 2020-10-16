@@ -1,7 +1,10 @@
-# Empirial_Asset_Pricing_Python
+# 金融数据科学(Financial Data Science)
 
-This repository main implements the book titled "Empirical Asset Pricing: The Cross Section of Stock Returns" by Bali, Engle, and Murray, 2016.
+主要包括Python基础、基于Python的数据分析（含数据探索、数据整理、数据建模和数据交流等），以及金融数据处理的内容。此部分内容的前身为机器学习(2017年开始)，目前统称为金融数据科学。
 
-Besides the cross sectional return parts above, we also implement some time series prediciton. Related papers are attached. 
+2020年牵头人：张晨曦；主讲小组：鲍余薇、陈雨萌、孔彤阳、龙真、吕漫妮、汤潮、屠雪永、叶鑫
+
+
+
 
 
