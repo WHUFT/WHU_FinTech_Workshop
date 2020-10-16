@@ -16,4 +16,5 @@
 2. The Elements of Statistical Learning: Data Mining, Inference, and Prediction. Hastie, T., R. Tibshirani, and J. Friedman. Springer. 2009. 
 3. 机器学习，周志华，清华大学出版社，2016。
 4. 统计学习方法(第二版)，李航，清华大学出版社，2019。
+5. Hands-On Machine Learning with R，Bradley Boehmke & Brandon Greenwell，CRC Press，2019。[在线](https://bradleyboehmke.github.io/HOML/)
 
