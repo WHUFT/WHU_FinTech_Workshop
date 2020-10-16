@@ -21,19 +21,23 @@
 * PPT版本可以上传至WeeklyMeeting。
 
 
+
+
 ## 3：研究方法学习班
 
-这一部分主要是本科生研讨班，主要是帮助新进成员/本科生掌握编程和资产定价研究的基本方法。所有内容的代码实现采用Python语言。
+研究方法学习班旨在帮助学生掌握编程和资产定价研究的基本研究方法，强调代码实现和数据，实现采用Python语言。
 
 
 
-"Talk is cheap. Show me the **code**."   -- Linus Torvalds
+> "Talk is cheap. Show me the **code**."   -- Linus Torvalds
+>
 
-"In God we trust, all others bring **data**."  -- Edwards Deming
+> "In God we trust, all others bring **data**."   -- Edwards Deming
+>
 
 
 
-主要包括如下三部分，分别从秋季学期到春季学期：
+学习班包括三部分研究方法：
 
 1. [金融数据科学(Financial Data Science)](10-研究方法学习班/11-金融数据科学/README.md)
 
