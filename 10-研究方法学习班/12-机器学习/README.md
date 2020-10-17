@@ -1,4 +1,4 @@
-# 统计机器学习(Statistical Machine Learning)
+# 机器学习(Machine Learning)
 
 运用Python实现机器学习的基本内容，由于经管类以应用为主，因此着重于机器学习基本概念的理解，以及相应的实现。
 
