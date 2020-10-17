@@ -15,6 +15,7 @@
 ### 参考教材
 
 1. 实证资产定价：股票横截面收益，Turan G. Bali著，中国人民大学出版社，2020。[京东](https://item.jd.com/12616137.html)
+   Empirical Asset Pricing: the Cross-Section of Stock Return, Turan G. Bali, 2016》
 2. 因子投资：方法与实践，石川、刘洋溢、连祥斌著，电子工业出版社，2020。[京东](https://item.jd.com/12961106.html)
 
 
