@@ -48,6 +48,8 @@
 
    用Python实现实证资产定价的基本方法，主要基于中国市场的数据。内容以教材1的截面收益为主，同时也包括了时序收益和中国市场的因子模型等。
 
+---
+
 ### Report bugs：
 
 * open an issue or send an email to Bin Li at binli.whu@whu.edu.cn
