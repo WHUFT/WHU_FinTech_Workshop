@@ -27,13 +27,11 @@
 研究方法学习班旨在帮助学生掌握编程和实证资产定价研究的基本方法，强调代码实现和数据证明，采用Python语言。
 
 
-
-> "Talk is cheap. Show me the **code**."   -- Linus Torvalds
-
-> "In God we trust, all others bring **data**."   -- Edwards Deming
-
 > "Get your hands dirty."  -- Idiom.
 
+> "Talk is cheap, show me the **code**."   -- Linus Torvalds
+
+> "In God we trust, all others bring **data**."   -- Edwards Deming
 
 
 学习班包括三部分研究方法：
