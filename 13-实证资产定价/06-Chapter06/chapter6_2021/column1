@@ -1,0 +1,12 @@
+Coefficient Value,(1)
+Average(c0),15.04
+Standard error(c0),2.88
+t-statistic(c0),5.23
+p-value(c0),0.0
+Average(c1),-2.65
+Standard error(c1),1.87
+t-statistic(c1),-1.42
+p-value(c1),0.16
+R2,0.011
+Adj.R2,0.011
+n,5555.0
