@@ -1,8 +1,6 @@
-# 实证资产定价(Empirical Asset Pricing)
+# 量化投资系统(Algorithmic Trading)
 
-本学习班用Python实现实证资产定价的基本方法，主要基于中国市场的数据。内容以教材1的截面收益为主，同时也包括了时序收益和中国市场的因子模型等。
-
-
+本学习班着重学习量化投资系统的全貌，并采用Python实现。需要有一定的Python编程基础和机器学习基础，对代码量的要求较高。
 
 ### 主讲小组
 
@@ -14,8 +12,6 @@
 
 ### 参考教材
 
-1. 实证资产定价：股票横截面收益，Turan G. Bali等著，张学勇、朱一峰译，中国人民大学出版社，2020。[京东](https://item.jd.com/12616137.html)
-2. Empirical Asset Pricing: the Cross-Section of Stock Return, Bali, Engle, and Murray. Wiley, 2016.
-3. 因子投资：方法与实践，石川、刘洋溢、连祥斌著，电子工业出版社，2020。[京东](https://item.jd.com/12961106.html)
+1. Machine Learning for Algorithmic Trading: Predictive models to extract signals from market and alternative data for systematic trading strategies with Python (Second Edition)，Stefan Jansen，Packt Publishing，2020。[Amazon](https://www.amazon.com/Machine-Learning-Algorithmic-Trading-alternative/dp/1839217715?pf_rd_r=GZH2XZ35GB3BET09PCCA&pf_rd_p=c5b6893a-24f2-4a59-9d4b-aff5065c90ec&pd_rd_r=91a679c7-f069-4a6e-bdbb-a2b3f548f0c8&pd_rd_w=2B0Q0&pd_rd_wg=GMY5S&ref_=pd_gw_ci_mcx_mr_hp_d) [Codes](https://github.com/stefan-jansen/machine-learning-for-trading)
 
 
