@@ -5,13 +5,9 @@
 - 请新进的成员阅读公用文档。
 - 如果需要上传权限，请自行注册github账号，再邮件联系李斌添加。
 
-
-
 ## 一、课题组会
 
 - 研究生工作汇报，此部分内容请移步WeeklyMeeting私有库。
-
-
 
 ## 二、文献解读研讨班
 
@@ -21,18 +17,15 @@
 * 讲解结束后，请上传文献解读的pdf。pdf或文档按月存放，文件统一命名为: *日期姓名论文展示.pdf*，比如：20200418_李玥阳_论文展示.pdf。
 * PPT版本可以上传至WeeklyMeeting。
 
-
 ## 三、研究方法学习班
 
 研究方法学习班旨在帮助学生掌握编程和实证资产定价研究的基本方法，强调代码实现和数据证明，采用Python语言。
-
 
 > "Get your hands dirty."  -- Idiom.
 
 > "Talk is cheap, show me the **code**."   -- Linus Torvalds
 
 > "In God we trust, all others bring **data**."   -- Edwards Deming
-
 
 学习班包括三部分研究方法：
 
@@ -47,6 +40,9 @@
 3. [实证资产定价(Empirical Asset Pricing)](10-研究方法学习班/13-实证资产定价/README.md) 
 
    用Python实现实证资产定价的基本方法，主要基于中国市场的数据。内容以教材1的截面收益为主，同时也包括了时序收益和中国市场的因子模型等。
+
+## 四、机器学习与量化交易系统学习班
+
 
 ---
 
