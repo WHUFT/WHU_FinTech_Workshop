@@ -1,4 +1,4 @@
-# 武汉大学金融科技研讨班(WHU Financial Technology Workshop)
+# 武汉大学金融科技研讨班(WHU Workshop on Financial Technology)
 
 ## 零、必读
 
