@@ -1,6 +1,6 @@
 # Tidy Finance & Empirical Asset Pricing
 
-本学习班用Python实现Tidy Finance with R的内容，主要基于美国市场的数据。
+本学习班着重于用Python复制Tidy Finance with R的内容，主要基于美国市场的数据。
 ### 主讲小组
 
 2023年(秋季)：王梦涵（组织）、石宛青、喻清言、沈华傲、何蕾
