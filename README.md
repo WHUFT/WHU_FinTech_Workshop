@@ -3,19 +3,21 @@
 ## 零、必读
 
 - 请新进的成员阅读公用文档。
-- 如果需要上传权限，请自行注册github账号，再邮件联系李斌添加。
+- 如果需要上传权限，请自行注册github账号，再邮件联系李斌(binli.whu@whu.edu.cn)添加。
 
 ## 一、课题组会
 
 - 研究生工作汇报，此部分内容请移步WeeklyMeeting私有库。
 
-## 二、文献解读研讨班
+## 二、文献研讨班
 
+* 文献目录见组会安排文档。
 * [文献检索](00-公用文档/01-1-文献来源及检索技巧.pdf)的方法
 * 请先阅读[文献解读与PPT规范](00-公用文档/02-1-文献解读PPT规范.md)，在有更好的论文解读规范之前按照文献解读规范准备汇报。
-* 文献目录见组会安排文档。
 * 讲解结束后，请上传文献解读的pdf。pdf或文档按月存放，文件统一命名为: *日期姓名论文展示.pdf*，比如：20200418_李玥阳_论文展示.pdf。
 * PPT版本可以上传至WeeklyMeeting。
+
+* 参会的每位同学需要提前阅读文献，并整理 2 页内的摘要；摘要参考方法见[06-01-How to summarize academic papers 20240319](00-公用文档/06-01-How to summarize academic papers 20240319.pdf)。解读方法可以看[06-02-Kinney - 2019 - The Kinney Three Paragraphs (and More) for Account](00-公用文档/06-02-Kinney - 2019 - The Kinney Three Paragraphs (and More) for Account.pdf)。
 
 ## 三、研究方法学习班
 
