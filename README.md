@@ -31,6 +31,7 @@
 
 经常有些学习工具
 1. [The Missing Semester of Your CS Education 中文版](https://missing-semester-cn.github.io/)
+
    本学习内容主要掌握一些常用的工具，更加便利自己的电脑操作。
 
 学习班包括四部分研究方法：
