@@ -1,0 +1,577 @@
+---
+title: "单变量投资组合排序"
+author: "邓熙悦"
+date: "2024-11-27"
+output:
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: flatly
+    highlight: tango
+---
+
+投资组合排序的主要应用是检查一个或多个变量是否可以预测未来的超额回报。
+
+按照排序变量（本实验中为贝塔系数）特征将个股分类到投资组合中，其中每个投资组合中的股票在排序变量方面相似。不同的投资组合代表多元化的投资，这些投资在排序变量的级别上有所不同。通过回归，可以识别回报分布中的差异与排序变量之间的关系。
+
+
+## 导入包
+
+```{r message=FALSE}
+library(tidyverse)
+# library(RSQLite)
+library(scales)
+library(lmtest)
+library(broom)
+library(sandwich) 
+```
+
+## 导入数据
+
+```{r message=FALSE}
+factors_ff3_monthly <- read_csv("data/csv/factors_ff3_monthly.csv") %>% 
+  select(date, mkt_excess)   # 市场超额收益
+
+crsp_monthly <- read_csv("data/csv/crsp_monthly.csv") %>% 
+  select(permno, date, ret_excess, mktcap_lag)    # 超额收益与市值数据
+
+beta <- read_csv("data/csv/beta.csv") %>% 
+  select(permno, date, beta_monthly)   # 贝塔数据
+```
+
+投资时只能根据历史数据，取滞后一期的β值。
+
+```{r}
+beta_lag <- beta %>%
+  mutate(beta_monthly_lag = lag(beta_monthly)) %>% 
+  select(permno, date, beta_monthly_lag) %>% 
+  filter(!is.na(beta_monthly_lag))
+beta_lag
+```
+
+```{r}
+data_for_sorts <- crsp_monthly %>% 
+  inner_join(beta_lag, by=c("permno", "date"))
+data_for_sorts
+```
+
+# 1 两投资组合分类
+
+## 1.1 计算断点
+
+断点通过计算每个时间点的 beta_lag 的中位数来确定的。
+
+```{r}
+beta_portfolios <- data_for_sorts %>% 
+  group_by(date) %>% 
+  mutate(
+    breakpoint = median(beta_monthly_lag),
+    portfolio = case_when(
+      beta_monthly_lag <= breakpoint ~ "low",
+      beta_monthly_lag > breakpoint ~ "high"
+    )
+  ) %>% 
+  group_by(date, portfolio) %>% 
+  summarize(ret = weighted.mean(ret_excess, mktcap_lag, na.rm = T), 
+            .groups = "drop")  # 计算加权回报 
+beta_portfolios
+```
+
+## 1.2 构建多空策略，计算收益率
+
+假设市场没有摩擦，该策略无需投入资金实现
+
+```{r}
+beta_longshort <- beta_portfolios %>% 
+  pivot_wider(id_cols = date, names_from = portfolio, values_from = ret) %>% 
+  filter(!is.na(high)&!is.na(low)) %>% 
+  mutate(long_short = high - low)
+beta_longshort
+```
+
+## 1.3 投资策略评估
+
+计算组合的平均超额回报率，并检验平均超额回报率是否显著大于0。
+
+这里引入Newey-West标准差以应对时间序列数据中的自相关和异方差问题。
+
+
+```{r}
+model_fit <- lm(long_short ~ 1, data = beta_longshort)
+coeftest(model_fit, vcov = NeweyWest)
+coeftest(model_fit, vcov = NeweyWest(model_fit, lag = 6, prewhite = FALSE))
+```
+
+根据检验结果，不能拒绝平均收益等于0的假设，这说明做空低贝塔股票来做多高贝塔股票的策略没有产生超额回报。
+然而，根据CAPM，高贝塔系数股票应该会产生更高的预期回报。
+
+# 2 多投资组合——程序化投资组合分类
+
+
+## 2.1 计算断点与投资组合分组，并输出分组
+
+```{r}
+assign_portfolio <- function(data, sorting_variable, n_portfolios) {
+  breakpoints <- data %>% 
+    pull({{ sorting_variable }}) %>% 
+    quantile(probs = seq(0, 1, length.out = n_portfolios + 1),
+      na.rm = TRUE,
+      names = FALSE)
+  
+  assigned_portfolios <- data %>% 
+    mutate(portfolio = findInterval(
+      pick(everything()) %>% 
+        pull({{ sorting_variable }}),
+      breakpoints,
+      all.inside = TRUE
+    )) %>% 
+    pull(portfolio)
+  
+  # Output
+  return(assigned_portfolios)
+  
+}
+```
+
+## 2.2 引用函数对data_for_sorts进行分组，并计算组合的收益率
+
+```{r}
+beta_portfolios <- data_for_sorts %>% 
+  group_by(date) %>% 
+  mutate(
+    portfolio = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = beta_monthly_lag,
+      n_portfolios = 10),
+    portfolio = as.factor(portfolio)) %>% 
+  group_by(portfolio, date) %>% 
+  summarize(
+    ret_excess = weighted.mean(ret_excess, mktcap_lag),
+    .groups = "drop") %>% 
+  # 与市场表现链接，以借助capm判断投资组合的表现情况
+  left_join(factors_ff3_monthly, join_by(date))
+
+beta_portfolios
+
+```
+
+## 2.3 投资策略评估
+
+计算 CAPM 调整后的 alphas、每个 beta 投资组合的 beta 和平均收益
+
+```{r}
+beta_portfolios_summary <- beta_portfolios %>% 
+  nest(data = c(date, ret_excess, mkt_excess)) %>% 
+  # 对每组数据应用回归模型，得到投资组合的α和β值
+  mutate(estimates = map(
+    data, ~ tidy(lm(ret_excess ~ 1 + mkt_excess, data = .x)))) %>% 
+  # 拆分数据框
+  unnest(estimates) %>% 
+  select(portfolio, term, estimate) %>% 
+  pivot_wider(names_from = term, values_from = estimate) %>%  
+  rename(alpha = `(Intercept)`, beta = mkt_excess) %>% 
+  # 计算投资组合整个研究期的平均收益，体现组合整体趋势
+  left_join(beta_portfolios %>% 
+              group_by(portfolio) %>% 
+              summarize(ret_excess = mean(ret_excess), .groups = "drop"),
+    by = "portfolio")
+beta_portfolios_summary
+```
+
+画图查看市场α表现
+
+```{r}
+beta_portfolios_summary %>% 
+  ggplot(aes(x = portfolio, y = alpha, fill = portfolio)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "CAPM alphas of beta-sorted portfolios",
+    x = "Portfolio",
+    y = "CAPM alpha",
+    fill = "Portfolio"
+  ) +
+  scale_y_continuous(labels = percent) +
+  theme(legend.position = "None")
+```
+
+
+图形表明，低 beta 投资组合往往表现出正 alpha，而高 beta 投资组合表现出负 alpha。这与 CAPM 的预测相矛盾。
+
+根据 CAPM，风险调整后的回报率在统计上应与零没有区别。
+
+
+# 3 证券市场线与贝塔投资组合
+
+绘制了证券市场线。
+
+```{r}
+# 拟合不同贝塔投资组合的实际超额收益情况
+sml_capm <- lm(ret_excess ~ 1 + beta, data = beta_portfolios_summary)$coefficients
+
+beta_portfolios_summary %>% 
+  # 投资组合的实际超额收益情况
+  ggplot(aes(
+    x = beta, 
+    y = ret_excess, 
+    color = portfolio
+  )) +
+  geom_point() +
+  # 拟合SML情况
+  geom_abline(
+    intercept = sml_capm[1],
+    slope = sml_capm[2],
+    linetype = "dashed"
+  ) +
+  # 根据CAPM的超额收益情况(Alpha = 0)
+  geom_abline(
+    intercept = 0,
+    slope = mean(factors_ff3_monthly$mkt_excess),
+    linetype = "solid"
+  ) +
+  scale_y_continuous(
+    labels = percent,
+    limit = c(0, mean(factors_ff3_monthly$mkt_excess) * 2)
+  ) +
+  scale_x_continuous(limits = c(0, 2)) +
+  labs(
+    x = "Beta", y = "Excess return", color = "Portfolio",
+    title = "Average portfolio excess returns and average beta estimates"
+  )
+```
+
+高贝塔投资组合回报与市场回报具有高度相关性。然而，高贝塔股票的平均超额回报率似乎低于证券市场线所暗示的对高市场风险的“适当”补偿。
+
+
+进一步地，用两端的贝塔投资组合构建多空投资策略
+
+```{r}
+beta_longshort <- beta_portfolios |>
+  mutate(portfolio = case_when(
+    portfolio == max(as.numeric(portfolio)) ~ "high",
+    portfolio == min(as.numeric(portfolio)) ~ "low"
+  )) |>
+  filter(portfolio %in% c("low", "high")) |>
+  pivot_wider(id_cols = date, 
+              names_from = portfolio, 
+              values_from = ret_excess) |>
+  mutate(long_short = high - low) |>
+  left_join(factors_ff3_monthly, join_by(date))
+beta_longshort
+```
+
+由此产生的多空策略没有表现出统计上显着的回报。
+
+```{r}
+coeftest(lm(long_short ~ 1, data = beta_longshort),
+  vcov = NeweyWest
+)
+```
+
+求市场超额回报
+
+```{r}
+coeftest(lm(long_short ~ 1 + mkt_excess, data = beta_longshort),
+  vcov = NeweyWest
+)
+```
+
+CAPM模型中，投资组合的α应为0，意味着在通过β调整后，超额回报应该是零
+但是投资组合显示出负alpha值，与CAPM矛盾
+
+此时，反向贝塔投注策略，即做空高贝塔股票，做多低贝塔股票的策略似乎可以获得超过CAPM预期的回报。
+
+因为借款限制，投资者不能卖空低β投资组合，但会受到激励购买高贝塔股票，这导致此类高贝塔股票的价格相对较高，因此预期回报低于CAPM的预期回报。
+
+
+比较低贝塔投资组合、高贝塔投资组合和多空投资组合的年收益情况
+
+```{r}
+beta_longshort %>% 
+  group_by(year = year(date)) %>% 
+  # 计算年化收益
+  summarize(
+    low = prod(1 + low) - 1,
+    high = prod(1 + high) - 1,
+    long_short = prod(1 + long_short) - 1
+  ) %>% 
+  pivot_longer(cols = -year) %>% 
+  ggplot(aes(x = year, y = value, fill = name)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~name, ncol = 1) +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Annual returns of beta portfolios",
+    x = NULL, y = NULL
+  )
+```
+
+可以看出多空投资组合没有持续的、显著的正向超额表现。
+
+
+# 4 习题
+
+## 4.1 采用基于不同投资组合数量的两种多空贝塔策略，并比较回报。回报是否有显著差异？两种策略之间的夏普比率如何比较？找到一个额外的投资组合评估统计数据并计算它。
+
+
+```{r}
+beta_longshort <- beta_portfolios %>% 
+  mutate(portfolio = case_when(
+    as.numeric(portfolio) == max(as.numeric(portfolio)) ~ "high",
+    as.numeric(portfolio) <= min(as.numeric(portfolio))+1 ~ "low"
+  )) %>% 
+  filter(portfolio %in% c("low", "high")) %>% 
+  group_by(date, portfolio) %>% 
+  summarise(portfolio_ret_excess = mean(ret_excess),na.rm=T) %>% 
+  pivot_wider(id_cols = date, 
+              names_from = portfolio, 
+              values_from = portfolio_ret_excess) |>
+  mutate(long_short = high - low) |>
+  left_join(factors_ff3_monthly, join_by(date))
+beta_longshort
+```
+
+
+计算夏普比率
+
+
+
+评估方式：最大回撤（MDD)
+
+
+
+
+## 4.2 我们绘制了上述 10 个 beta 投资组合的 alpha 值。编写一个函数来检验这些估计值的显著性。哪些投资组合具有显著的 alpha 值？
+
+
+先重复刚才的数据处理步骤
+
+```{r}
+beta_portfolios <- data_for_sorts %>% 
+  group_by(date) %>% 
+  mutate(
+    portfolio = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = beta_monthly_lag,
+      n_portfolios = 10),
+    portfolio = as.factor(portfolio)) %>% 
+  group_by(portfolio, date) %>% 
+  summarize(
+    ret_excess = weighted.mean(ret_excess, mktcap_lag),
+    .groups = "drop") %>% 
+  # 与市场表现链接，以借助capm判断投资组合的表现情况
+  left_join(factors_ff3_monthly, join_by(date))
+
+beta_portfolios_summary_alpha <- beta_portfolios %>% 
+  nest(data = c(date, ret_excess, mkt_excess)) %>% 
+  # 对每组数据应用回归模型，得到投资组合的α和β值
+  mutate(estimates = map(
+    data, ~ tidy(lm(ret_excess ~ 1 + mkt_excess, data = .x)))) %>% 
+  # 拆分数据框
+  unnest(estimates) %>% 
+  select(portfolio, term, p.value) %>% 
+  pivot_wider(names_from = term, values_from = p.value) %>%  
+  rename(alpha_p = `(Intercept)`, beta_p = mkt_excess) %>% 
+  filter(alpha_p < 0.05)
+beta_portfolios_summary_alpha
+```
+
+第2、3、10个beta 投资组合具有显著alpha值。 
+
+
+封装成函数
+——要求：命名为date, ret_excess, mkt_excess, 输入数据框以及要求的置信区间
+
+```{r}
+detect_alpha <- function(data, CI) {
+  
+  detext_alpha <- data %>% 
+    nest(data = c(date, ret_excess, mkt_excess)) %>% 
+    mutate(estimates = map(
+    data, ~ tidy(lm(ret_excess ~ 1 + mkt_excess, data = .x)))) %>% 
+    unnest(estimates) %>% 
+    select(portfolio, term, p.value) %>% 
+    pivot_wider(names_from = term, values_from = p.value) %>%  
+    rename(alpha_p = `(Intercept)`, beta_p = mkt_excess) %>% 
+    filter(alpha_p < 1-CI)
+
+  return(detext_alpha)
+    
+}
+
+beta_portfolios_summary_alpha <- detect_alpha(beta_portfolios, 0.90)
+beta_portfolios_summary_alpha
+
+```
+
+
+## 4.3 计算基于日回报的分组 beta 值，并指出结果中的差异。
+
+数据处理
+```{r message=FALSE}
+factors_ff3_daily <- read_csv("data/csv/factors_ff3_daily.csv") %>% 
+  select(date, mkt_excess)   # 市场超额收益
+
+crsp_daily <- read_csv("data/csv/crsp_daily.csv") %>% 
+  select(permno, date, ret_excess)    # 超额收益与市值数据
+
+beta_daily <- read_csv("data/csv/beta.csv") %>% 
+  select(permno, date, beta_daily)   # 贝塔数据
+
+beta_lag_daily <- beta_daily %>%
+  mutate(beta_daily_lag = lag(beta_daily)) %>% 
+  select(permno, date, beta_daily_lag) %>% 
+  filter(!is.na(beta_daily_lag))
+
+data_for_sorts_daily <- crsp_daily %>% 
+  inner_join(beta_lag_daily, by=c("permno", "date"))
+data_for_sorts_daily
+
+```
+
+引用函数对data_for_sorts_daily进行分组，并计算组合的收益率
+
+```{r}
+beta_portfolios_daily <- data_for_sorts_daily %>% 
+  group_by(date) %>% 
+  mutate(
+    portfolio = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = beta_daily_lag,
+      n_portfolios = 10),
+    portfolio = as.factor(portfolio)) %>% 
+  group_by(portfolio, date) %>% 
+  summarize(ret_excess = mean(ret_excess), .groups = "drop") %>% 
+  # 与市场表现链接，以借助capm判断投资组合的表现情况
+  left_join(factors_ff3_daily, join_by(date))
+
+beta_portfolios_daily
+
+```
+
+计算 CAPM 调整后的 alphas、每个 beta 投资组合的 beta 和平均收益
+
+```{r}
+beta_portfolios_summary_daily <- beta_portfolios_daily %>% 
+  nest(data = c(date, ret_excess, mkt_excess)) %>% 
+  # 对每组数据应用回归模型，得到投资组合的α和β值
+  mutate(estimates = map(
+    data, ~ tidy(lm(ret_excess ~ 1 + mkt_excess, data = .x)))) %>% 
+  # 拆分数据框
+  unnest(estimates) %>% 
+  select(portfolio, term, estimate) %>% 
+  pivot_wider(names_from = term, values_from = estimate) %>%  
+  rename(alpha = `(Intercept)`, beta = mkt_excess) %>% 
+  # 计算投资组合整个研究期的平均收益，体现组合整体趋势
+  left_join(beta_portfolios %>% 
+              group_by(portfolio) %>% 
+              summarize(ret_excess = mean(ret_excess), .groups = "drop"),
+    by = "portfolio")
+beta_portfolios_summary_daily
+```
+
+画图查看市场α表现
+
+```{r}
+beta_portfolios_summary_daily %>% 
+  ggplot(aes(x = portfolio, y = alpha, fill = portfolio)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "CAPM alphas of beta-sorted portfolios",
+    x = "Portfolio",
+    y = "CAPM alpha",
+    fill = "Portfolio"
+  ) +
+  scale_y_continuous(labels = percent) +
+  theme(legend.position = "None")
+```
+
+绘制了证券市场线。
+
+```{r}
+# 拟合不同贝塔投资组合的实际超额收益情况
+sml_capm_daily <- lm(ret_excess ~ 1 + beta, data = beta_portfolios_summary_daily)$coefficients
+
+beta_portfolios_summary_daily %>% 
+  # 投资组合的实际超额收益情况
+  ggplot(aes(
+    x = beta, 
+    y = ret_excess, 
+    color = portfolio
+  )) +
+  geom_point() +
+  # 拟合SML情况
+  geom_abline(
+    intercept = sml_capm_daily[1],
+    slope = sml_capm_daily[2],
+    linetype = "dashed"
+  ) +
+  # 根据CAPM的超额收益情况(Alpha = 0)
+  geom_abline(
+    intercept = 0,
+    slope = mean(factors_ff3_daily$mkt_excess),
+    linetype = "solid"
+  ) +
+  scale_y_continuous(
+    labels = percent,
+    limit = c(0, mean(factors_ff3_daily$mkt_excess) * 2)
+  ) +
+  scale_x_continuous(limits = c(0, 2)) +
+  labs(
+    x = "Beta", y = "Excess return", color = "Portfolio",
+    title = "Average portfolio excess returns and average beta estimates"
+  )
+```
+
+进一步地，用两端的贝塔投资组合构建多空投资策略
+
+```{r}
+beta_longshort_daily <- beta_portfolios_daily |>
+  mutate(portfolio = case_when(
+    portfolio == max(as.numeric(portfolio)) ~ "high",
+    portfolio == min(as.numeric(portfolio)) ~ "low"
+  )) |>
+  filter(portfolio %in% c("low", "high")) |>
+  pivot_wider(id_cols = date, 
+              names_from = portfolio, 
+              values_from = ret_excess) |>
+  mutate(long_short = high - low) |>
+  left_join(factors_ff3_daily, join_by(date))
+beta_longshort_daily
+```
+
+由此产生的多空策略没有表现出统计上显着的回报。
+
+```{r}
+coeftest(lm(long_short ~ 1, data = beta_longshort_daily),
+  vcov = NeweyWest
+)
+```
+
+
+求市场超额回报
+
+```{r}
+coeftest(lm(long_short ~ 1 + mkt_excess, data = beta_longshort_daily),
+  vcov = NeweyWest
+)
+```
+
+## 4.4 鉴于本章的结果，您能否设计一种产生正超额回报（即 alpha）的多空策略？绘制您的策略的累积超额回报和市场超额回报以进行比较。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
