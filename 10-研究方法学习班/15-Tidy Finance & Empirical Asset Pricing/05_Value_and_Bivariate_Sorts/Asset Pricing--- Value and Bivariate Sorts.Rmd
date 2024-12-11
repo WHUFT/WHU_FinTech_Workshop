@@ -1,0 +1,538 @@
+---
+title: "asset price"
+author: "liuxinyu"
+date: "2024-12-03"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(RSQLite)
+library(dplyr)
+library(tidyr)
+library(dbplyr)
+library(lubridate)
+library(future)
+library(future.apply)
+library(purrr)
+library(rlang)
+
+
+```
+
+数据准备
+1.首先，我们从访问和管理财务数据中介绍的SQLite数据库中加载必要的数据。我们根据CRSP样本进行投资组合排序，但只在内存中保留必要的列。我们使用与规模排序和P-Hacking中相同的公司规模数据源。
+
+2.此外，我们利用会计数据。最常见的会计数据来源是Compustat。在这个应用程序中，我们只需要从数据库中选择账面权益数据。此外，我们将变量datadate转换为其月度值，因为我们在这里只考虑月度回报，不需要考虑确切的日期。为了实现这一点，我们使用函数floor_date（）。
+
+floor_date()函数介绍
+floor_date() 函数是 R 语言 lubridate 包中的一个功能，它用于将日期时间对象向下取整到最接近的指定时间单位的边界。以下是 floor_date() 函数的详细介绍：floor_date() 函数接收一个日期时间对象，并将其向下舍入到最近的整数秒、分钟、小时、天、周、月或年。用户可以指定舍入到哪个时间单位，例如舍入到最近的秒、分钟、小时等
+
+```{r}
+# 设置工作目录到包含CSV文件的文件夹
+knitr::opts_chunk$set(root.dir = "C:/Users/刘馨钰/Desktop/For Students/csv")
+setwd("C:/Users/刘馨钰/Desktop/For Students/csv")
+
+crsp_monthly <-read.csv("crsp_monthly.csv") |>
+    select(
+    permno, gvkey, date, ret_excess,
+    mktcap, mktcap_lag, exchange
+  ) |> 
+  collect()  |>
+  drop_na()
+
+crsp_monthly <- crsp_monthly |>
+  mutate(
+    # 使用 parse_date_time() 解析日期格式，并去掉时间部分
+    date = floor_date(parse_date_time(date, orders = c("ymd HMS", "mdy HMS", "dmy HMS")), "month"),
+    # 如果你只需要日期部分（年/月/日），将其转换为 Date 类型
+    date = as.Date(date)
+  )
+
+# 检查修改后的数据
+head(crsp_monthly)
+
+book_equity <- read.csv("compustat.csv") |>
+  select(gvkey, datadate, be) |>
+  collect() |>drop_na() |>
+  mutate(# 解析日期并提取日期部分，忽略时间部分
+    date = floor_date(parse_date_time(datadate, orders = c("ymd", "mdy", "dmy", "ymd HMS")), "month"),
+    # 如果需要确保是日期类型，可以进一步转换为 `Date` 类型
+    date = as.Date(date))
+
+factors_ff3_monthly <-read.csv("factors_ff3_monthly.csv")
+
+```
+
+1.  滞后市值和账面市值比（Book-to-Market Ratio）计算
+
+处理会计数据的一个根本问题是前瞻性偏见；我们绝不能在形成当时不为公众所知的投资组合时包含数据。当然，研究人员在调查过去时比特工当时拥有更多的信息。然而，交易策略的异常超额回报不应依赖于信息优势，因为差异不能是知情代理人交易的结果。因此，我们不得不滞后于会计信息。
+
+我们继续落后于市值和公司规模一个月。然后，我们计算账面市值比率，该比率将公司的账面权益与其市场权益联系起来。账面市值比率高（低）的公司被称为价值（增长）公司。在匹配了同月的会计和市场权益信息后，我们将账面与市场之间的差异缩小了六个月。这是一种足够保守的方法，因为会计信息通常在六个月前发布。然而，在资产定价文献中，也使用了更长的滞后时间。1
+
+考虑到这两个变量，即公司规模滞后一个月，账面上市滞后六个月，我们使用为此目的创建的sorting_date-column将这些排序变量合并到我们的回报中。数据准备的最后一步是处理变量频率的差异。每月记录回报和公司规模。然而，会计信息仅每年发布一次。因此，我们每年只将账面市值比匹配一个月，有11个空观察结果。为了解决这个频率问题，我们将每家公司的最新账面市值比率带到随后的几个月，即我们用最新的报告填充缺失的观察结果。这是通过fill（）函数在按日期和公司排序（我们用permno和gvkey标识）和按公司排序（像往常一样用group_by（））后完成的。我们用一年以上的会计数据过滤掉所有观察结果。作为最后一步，我们删除所有缺少条目的行，因为回报无法与任何年度报告相匹配。
+
+```{r}
+#1.1. 市值滞后处理
+
+
+me <- crsp_monthly |>
+  mutate( sorting_date = date %m+% months(1)) |>  #这段代码的含义是将 date 变量中的日期增加一个月。这里的 date           应该是一个日期对象，%m+% 是 lubridate 包中的一个操作符，用于按月对日期进行增加或减少。months(1) 表示增加的月数，这里是增加1个月。
+  select(permno, sorting_date, me = mktcap)
+
+
+#1.2. 计算账面市值比（Book-to-Market Ratio）
+
+bm <- book_equity |>
+  inner_join(crsp_monthly, join_by(gvkey, date)) |>
+  mutate(
+    bm = be / mktcap,   #通过 mutate() 创建一个新的变量 bm，即账面市值比，它是公司的账面价值（be）与市场价值（mktcap）之比。账面市值比（Book-to-Market Ratio）常用来区分价值股（高账面市值比）与成长股（低账面市值比）
+    sorting_date = date %m+% months(6),  #再次使用 mutate() 来创建一个新列 sorting_date，将 date（数据日期）加上六个月（months(6)）。这个操作确保账面市值比是滞后六个月的，因为会计数据通常需要时间来发布，因此滞后六个月是一个常见的做法。
+    comp_date = sorting_date   #将 sorting_date 列赋值给一个新的列 comp_date，用来标记会计数据的日期。comp_date 之后用于填充缺失数据和过滤数据
+  ) |>
+  select(permno, gvkey, sorting_date, comp_date, bm)
+
+```
+
+2.  数据合并与缺失值填充
+
+```{r}
+#2.1. 合并数据
+
+data_for_sorts <- crsp_monthly |>
+  left_join(
+    bm, join_by(permno, gvkey, date == sorting_date)  #连接的日期 date 必须与 sorting_date 匹配。left_join() 保证了 crsp_monthly 中的所有行都能保留下来，即使在 bm 中找不到匹配的行。
+  ) |>
+  left_join(
+    me, join_by(permno, date == sorting_date)  #通过 left_join() 将市值数据（me）加入到 data_for_sorts 中。这里是将 me 数据中的 sorting_date 列与 crsp_monthly 数据中的 date 列进行匹配。
+  ) |>
+  select(
+    permno, gvkey, date, ret_excess,
+    mktcap_lag, me, bm, exchange, comp_date
+  )
+
+#2.2. 填充缺失值与时间范围过滤
+
+data_for_sorts <- data_for_sorts |>
+  arrange(permno, gvkey, date) |>   #按公司标识符（permno）、公司标识符（gvkey）和日期（date）对数据进行排序，确保每个公司的数据按照时间顺序排列。
+  group_by(permno, gvkey) |>  #将数据按 permno 和 gvkey 进行分组，以便后续在每个公司（每个 permno 和 gvkey 的组合）内进行操作。
+  fill(bm, comp_date) |>  #使用 fill() 函数填充缺失值。由于会计数据是按年发布的，可能会出现某些月份没有账面市值比（bm）数据的情况。因此，fill() 函数会用最近的有效数据填充这些缺失的值（这里是使用公司最新的 bm 数据填充后续月份）。fill(bm, comp_date) 这一行的意思是，对于每个 permno 和 gvkey 分组内的数据，bm 列的缺失值将被其后最近的非缺失值填充，这是通过 comp_date 列来确定的顺序。如果 comp_date 列的值相同，则 bm 列的缺失值会被前一个非缺失值填充。这是一种常见的处理时间序列数据中缺失值的方法，特别是在金融数据分析中，确保每个公司的财务数据按照时间顺序排列后，可以用后续的值来填充前面的缺失值。
+  ungroup() |> 
+  filter(comp_date > date %m-% months(12)) |>  #使用 filter() 过滤掉那些会计数据日期（comp_date）距离当前日期超过12个月的数据。这个操作确保只使用最近一年内的会计数据。
+  select(-comp_date) |>
+  drop_na()
+
+head(data_for_sorts,n=10)
+
+```
+
+3.  计算投资组合的分组断点
+投资组合排序准备的最后一步是计算断点。我们继续使用相同的函数，允许指定用于断点的交换。此外，我们将参数sorting_variable重新引入到函数中，以定义不同的排序变量。
+在这些数据准备步骤之后，我们在独立和依赖的基础上提出了双变量投资组合排序。
+
+```{r}
+
+#接下来的代码定义了一个函数 assign_portfolio()，用于根据排序变量将数据分配到多个投资组合中。
+
+assign_portfolio <- function(data, 
+                             sorting_variable, 
+                             n_portfolios, 
+                             exchanges) {
+  breakpoints <- data |>
+    filter(exchange %in% exchanges) |>
+    pull({{ sorting_variable }}) |>
+    quantile(
+      probs = seq(0, 1, length.out = n_portfolios + 1),
+      na.rm = TRUE,
+      names = FALSE
+    )
+
+  assigned_portfolios <- data |>
+    mutate(portfolio = findInterval(
+      pick(everything()) |>
+        pull({{ sorting_variable }}),
+      breakpoints,
+      all.inside = TRUE
+    )) |>
+    pull(portfolio)
+  
+  return(assigned_portfolios)
+}
+
+```
+
+  #1. 创建独立排序的投资组合
+独立排序（Independent Sorts）
+独立排序的基本思想是基于两个排序变量（账面市值比和公司市值）分别创建投资组合，而不考虑这两个变量之间的相互关系。
+
+双变量排序在由两个排序变量跨越的二维空间内创建投资组合。然后，可以通过投资于各个变量谱两端的投资组合的交易策略的回报差异来评估任一排序变量的回报影响。在下面的示例中，我们使用账面市值比和公司规模作为排序变量，创建了一个五乘五的矩阵。我们最终得到了25个投资组合。由于我们对价值溢价（即高和低账面市值公司之间的回报差异）感兴趣，我们做多账面市值最高的公司的五个投资组合，做空账面市值最低的公司的5个投资组合。每端的五个投资组合是由于我们在账面市值分割的同时采用了规模分割。
+
+为了实现独立的双变量投资组合排序，我们为每个排序变量分别分配月度投资组合，以分别创建变量portfolio_bm和portfolio_me。然后，这些单独的投资组合被组合到存储在portfolio_companed中的最终排序中。分配投资组合后，我们计算每个投资组合每月的平均回报。此外，我们保留了按市值计价的投资组合，因为它使价值溢价的计算更容易。另一种选择是在单独的步骤中分解合并的投资组合。请注意，我们根据市值对每个投资组合中的股票进行加权，即我们决定对我们的回报进行价值加权。
+  
+```{r}
+
+value_portfolios <- data_for_sorts |>
+  group_by(date) |>
+  mutate(
+    portfolio_bm = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = "bm",
+      n_portfolios = 5,
+      exchanges = c("NYSE")
+    ),
+    portfolio_me = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = "me",
+      n_portfolios = 5,
+      exchanges = c("NYSE")
+    )) |>
+  group_by(date, portfolio_bm, portfolio_me) |>
+  summarize(
+    ret = weighted.mean(ret_excess, mktcap_lag),
+    .groups = "drop"
+  )
+
+  
+  #在每个日期组内，分别为账面市值比（portfolio_bm）和公司市值（portfolio_me）创建投资组合。使用 assign_portfolio() 函数来基于每个排序变量（bm 和 me）将数据分配到5个投资组合（n_portfolios = 5）中。exchanges = c("NYSE") 确保只考虑纽约证券交易所的公司。
+    
+   #在按日期、账面市值比（portfolio_bm）和公司市值（portfolio_me）分组后，计算每个组合的加权平均超额回报（weighted.mean(ret_excess, mktcap_lag)），加权因子是滞后市值（mktcap_lag）。
+  
+   #对每个组合计算加权平均的超额回报，drop 表示取消分组，得到一个包含每个组合的平均回报的数据框。
+
+#2. 计算价值溢价（Value Premium）
+#根据我们的月度投资组合回报，我们已准备好计算价值溢价。然而，我们仍需决定如何投资于五高五低的账面市值投资组合。最常见的方法是平均权衡这些投资组合，但这是另一个研究人员的选择。然后，我们计算高和低账面市值投资组合之间的回报差异，并显示平均价值溢价。
+
+value_premium <- value_portfolios |>
+  group_by(date, portfolio_bm) |>
+  summarize(ret = mean(ret), .groups = "drop_last") |>
+  summarize(
+    value_premium = ret[portfolio_bm == max(portfolio_bm)] -
+      ret[portfolio_bm == min(portfolio_bm)]
+  ) |> 
+  summarize(
+    value_premium = mean(value_premium)
+  )
+
+value_premium 
+
+```
+
+
+#1. 创建依赖排序的投资组合
+
+与独立排序不同，依赖排序方法会在每个排序变量的分组内再进行第二个排序，这样每个大小组合内的账面市值比组合是不同的，确保每个组合内的公司数量相同。
+
+在前面的练习中，我们分配了投资组合，而没有考虑分配中的第二个变量。该协议称为独立投资组合排序。另一种方法，即依赖排序，在第一个排序变量的每个桶内为第二个排序变量创建投资组合。在下面的例子中，我们将公司分为五个大小的类别，在每个类别中，我们为公司分配五个按账面价值计价的投资组合。因此，我们每月都有特定于每个规模组的断点。独立和依赖投资组合分类之间的决定是研究人员的另一种选择。请注意，依赖排序确保每个投资组合中的股票数量相等。
+
+为了实现依赖排序，我们首先通过调用assign_portfolio（）并使用sorting_variable=“me”来创建大小组合。然后，在将书籍分配给市场投资组合之前，我们再次按月份和投资组合的规模对数据进行分组。其余的实现与之前相同。最后，我们计算价值溢价。
+
+```{r}
+
+value_portfolios <- data_for_sorts |>
+  group_by(date) |>
+  mutate(portfolio_me = assign_portfolio(
+    data = pick(everything()),
+    sorting_variable = "me",
+    n_portfolios = 5,
+    exchanges = c("NYSE")
+  )) |>    #首先基于公司市值（me）创建5个市值组合（portfolio_me）。此时，数据按日期分组，每个月的数据会根据公司市值分为5组。
+  group_by(date, portfolio_me) |>
+  mutate(
+    portfolio_bm = assign_portfolio(
+      data = pick(everything()),
+      sorting_variable = "bm",
+      n_portfolios = 5,
+      exchanges = c("NYSE")
+    )) |>  #在每个月的市值组内，再进行账面市值比（bm）的组合排序，创建账面市值比的5个组合（portfolio_bm）
+  group_by(date, portfolio_me, portfolio_bm) |>
+  summarize(
+    ret = weighted.mean(ret_excess, mktcap_lag),
+    .groups = "drop"
+  )   #对于每个市值和账面市值比组合，计算加权平均的超额回报。
+
+#2. 计算价值溢价（Value Premium）
+
+value_premium <- value_portfolios |>
+  group_by(date, portfolio_bm) |>
+  summarize(ret = mean(ret), .groups = "drop_last") |>
+  summarize(
+    value_premium = ret[portfolio_bm == max(portfolio_bm)] -
+      ret[portfolio_bm == min(portfolio_bm)]
+  ) |> 
+  summarize(
+    value_premium = mean(value_premium)
+    
+  )
+
+
+value_premium
+
+#与独立排序中的价值溢价计算方法相同，首先按日期和账面市值比（portfolio_bm）分组，计算每个组合的平均回报，并求得最高和最低账面市值比组合的回报差异，最后计算月度和年化的价值溢价。
+
+```
+
+总的来说，我们将在本章中展示如何进行二元投资组合排序。在一种情况下，我们对投资组合进行独立排序。然而，我们也讨论了如何创建依赖投资组合排序。沿着大小排序和P-Hacking的思路，我们看到研究人员必须做出多少选择来实现投资组合排序，而双变量排序增加了选择的数量。
+
+
+
+EXCERSIZE
+
+1.在大小排序和P-Hacking中，我们研究了市场权益的分布。对账面权益和账面市值比率（以及断点图，即十分位数）重复此分析。
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(tidyr)
+
+book_equity_concentration <- book_equity %>%
+  group_by(date) %>%
+  mutate(
+    top01 = if_else(be >= quantile(be, 0.99,na.rm = TRUE), 1, 0),
+    top05 = if_else(be >= quantile(be, 0.95,na.rm = TRUE), 1, 0),
+    top10 = if_else(be >= quantile(be, 0.90,na.rm = TRUE), 1, 0),
+    top25 = if_else(be >= quantile(be, 0.75,na.rm = TRUE), 1, 0)
+  ) %>%
+  summarise(
+    `Largest 1% of stocks` = sum(be[top01 == 1]) / sum(be),
+    `Largest 5% of stocks` = sum(be[top05 == 1]) / sum(be),
+    `Largest 10% of stocks` = sum(be[top10 == 1]) / sum(be),
+    `Largest 25% of stocks` = sum(be[top25 == 1]) / sum(be)
+  ) %>%
+  pivot_longer(cols = -date)%>%
+  mutate(name = factor(name, levels = c(
+    "Largest 1% of stocks", "Largest 5% of stocks",
+    "Largest 10% of stocks", "Largest 25% of stocks"
+  )))
+
+# 绘制账面市值集中度变化图
+plot_be_concentration <- ggplot(book_equity_concentration, aes(x = date, y = value, color = name, linetype = name)) +
+  geom_line() +
+  scale_y_continuous(labels = percent_format()) +
+  scale_x_date(name = "", date_labels = "%Y") +
+  labs(title = "Percentage of total book equity in largest stocks", x = "", y = "", color = "", linetype = "") +
+  theme(legend.title = element_blank())
+
+# 绘制图形
+print(plot_be_concentration)
+
+
+
+bm_quantiles <- data_for_sorts %>%
+  group_by(date) %>%
+  summarise(
+    quantiles = list(quantile(bm, probs = seq(0.1, 1.0, 0.1))),  #这一步的作用是对每个日期组（即每个不同的 date），计算 bm 列的分位数。具体操作是使用 quantile() 函数，计算从 0.1 到 1.0 的分位数（即十个等分，分位数的值为：10%, 20%, ..., 100%）。并将这些分位数作为一个列表 quantiles 存储。
+    .groups = "drop"  #表示在汇总操作完成后，取消分组，使结果返回为一个没有分组的信息
+  ) %>%
+  unnest(cols = quantiles) %>%   #unnest()这一函数的作用是将列表列（这里是quantiles）展开成多行数据.原本每个date组对应一个包含多个分位数的列表，经过unnest()后，每个分位数都会变成一个单独的行。这样，quantiles列中的每个元素（即每个分位数值）都将作为一个单独的行出现。
+  mutate(quantile = as.integer(quantiles * 100)) %>%   #将每个分位数值乘以 100 并转换为整数。这样，原本是 0.1, 0.2, ..., 1.0 的分位数变为 10, 20, ..., 100
+  drop_na()
+
+# 绘制账面市值比的分位数图
+plot_bm_quantiles <- ggplot(bm_quantiles, aes(x = date, y = quantiles, color = factor(quantile))) +
+  geom_line() +
+  scale_x_date(breaks = "10 years", labels = scales::date_format("%Y")) +
+  labs(title = "Monthly deciles of book-to-market ratio", x = "", y = "", color = "") +
+  theme_minimal()
+
+# 绘制图形
+print(plot_bm_quantiles)
+
+
+# 计算账面市值的分位数
+be_quantiles <- book_equity %>%
+  group_by(date) %>%
+  summarise(
+    quantiles = list(quantile(be, probs = seq(0.1, 1.0, 0.1))),
+    .groups = "drop"
+  ) %>%
+  unnest(cols = quantiles) %>%
+  mutate(quantile = as.integer(quantiles * 100)) %>%
+  drop_na()
+
+# 绘制账面市值分位数图
+plot_be_quantiles <- ggplot(be_quantiles, aes(x = date, y = quantiles, color = factor(quantile))) +
+  geom_line() +
+  scale_x_date(breaks = "5 years", labels = scales::date_format("%Y")) +
+  scale_y_continuous(trans = 'log') +
+  labs(title = "Monthly deciles of book equity", x = "", y = "", color = "") +
+  theme_minimal()
+
+# 绘制图形
+print(plot_be_quantiles)
+
+```
+
+
+
+2.当我们调查投资组合时，我们只关注回报。然而，了解投资组合的特征也很有趣。编写一个函数，计算25个独立和依赖排序的投资组合的规模和账面市值的平均特征。
+
+```{r}
+# 计算每个组合的平均市值和账面市值比
+# 计算每个组合的平均市值和账面市值比
+calculate_avg_characteristics <- function(data_for_sorts, sorting_method = c("independent", "dependent")) {
+  sorting_method <- match.arg(sorting_method)  # 确保sorting_method是有效的
+  
+  if (sorting_method == "independent") {
+    # 独立排序：先按市值排序，然后按账面市值比排序
+    data_for_sorts <- data_for_sorts %>%
+      arrange(desc(me)) %>%
+      mutate(portfolio_me = ntile(me, 5)) %>%
+      arrange(desc(bm)) %>%
+      mutate(portfolio_bm = ntile(bm, 5))
+  } else if (sorting_method == "dependent") {
+    # 依赖排序：先按市值排序，然后在市值组内按账面市值比排序
+    data_for_sorts <- data_for_sorts %>%
+      arrange(desc(me)) %>%
+      mutate(portfolio_me = ntile(me, 5)) %>%
+      group_by(portfolio_me) %>%
+      arrange(desc(bm)) %>%
+      mutate(portfolio_bm = ntile(bm, 5)) %>%
+      ungroup()
+  }
+  
+  # 计算每个组合的平均市值和账面市值比
+  avg_characteristics <- data_for_sorts %>%
+    group_by(date, portfolio_bm, portfolio_me) %>%
+    summarize(
+      avg_me = mean(me, na.rm = TRUE),  # 计算每个组合的平均市值
+      avg_bm = mean(bm, na.rm = TRUE),  # 计算每个组合的平均账面市值比
+      .groups = "drop"
+    )
+  
+  return(avg_characteristics)
+}
+
+# 使用函数计算特征均值，独立排序
+avg_characteristics_independent <- calculate_avg_characteristics(data_for_sorts, sorting_method = "independent")
+
+# 使用函数计算特征均值，依赖排序
+avg_characteristics_dependent <- calculate_avg_characteristics(data_for_sorts, sorting_method = "dependent")
+
+# 查看计算结果
+head(avg_characteristics_independent)
+head(avg_characteristics_dependent)
+
+
+```
+3.关于规模溢价，这里构建的价值溢价也不遵循Fama和French（1993）。实施大小排序和p-hacking中的p-hacking设置，以找到最接近HML溢价的溢价。
+
+```{r}
+#补充并调整这一部分要用到的上一章的函数
+# 修改后的 compute_portfolio_returns 函数
+compute_portfolio_returns <- function(n_portfolios, 
+                                      exchanges = c("NYSE", "NASDAQ", "AMEX"),
+                                      value_weighted = TRUE,
+                                      data = data_for_sorts,
+                                      sorting_method) {
+  
+  # 1. 根据独立排序还是依赖排序来处理数据
+  if (sorting_method == "independent") {
+    # 独立排序：分别对每个变量进行排序，不考虑其他变量的排序关系
+    data <- data %>%
+      group_by(date) %>%
+      arrange(bm, me) %>%  # 假设bm和me是账面市值比和市值的列
+      mutate(
+        portfolio_bm = ntile(bm, n_portfolios),  # 根据账面市值比进行排序
+        portfolio_me = ntile(me, n_portfolios)   # 根据市值进行排序
+      )
+    
+  } else if (sorting_method == "dependent") {
+    # 依赖排序：按bm排序后，依赖排序me
+    data <- data %>%
+      group_by(date) %>%
+      arrange(bm, me) %>%
+      mutate(
+        portfolio_bm = ntile(bm, n_portfolios),
+        portfolio_me = ntile(me, n_portfolios)  # 对bm和me使用组合排序
+      )
+    
+  } else {
+    stop("Unknown sorting method")
+  }
+  
+ 
+  # 3. 如果有样本过少的组合，跳过这些组合
+  data <- data %>%
+    group_by(date, portfolio_bm, portfolio_me) %>%
+    filter(n() >= 5)  # 只保留样本数量 >= 5 的组合
+  
+  # 4. 计算每个投资组合的回报
+  data <- data %>%
+    group_by(date, portfolio_bm, portfolio_me) %>%
+    summarise(
+      mean_return = mean(ret_excess, na.rm = TRUE),  # 计算每个组合的平均超额回报
+      .groups = "drop"
+    )
+  
+  # 5. 计算价值溢价：低账面市值比（低bm）投资组合的回报减去高账面市值比（高bm）投资组合的回报
+  value_premium <- data %>%
+    group_by(date) %>%
+    summarise(
+      value_premium = ifelse(
+        all(is.na(mean_return[portfolio_bm == 1])) | all(is.na(mean_return[portfolio_bm == n_portfolios])),
+        NA,  # 如果某个组合的回报无法计算，则返回NA
+        mean(mean_return[portfolio_bm == 1], na.rm = TRUE) - mean(mean_return[portfolio_bm == n_portfolios], na.rm = TRUE)
+      )
+    ) %>%
+    ungroup()
+  
+  return(value_premium)  # 返回计算的价值溢价
+}
+
+# 扩展设置，包含独立排序和依赖排序的参数
+p_hacking_setup <- expand_grid(
+  n_portfolios = c(5),  # 使用5个投资组合
+  exchanges = list("NYSE", c("NYSE", "NASDAQ", "AMEX")),  # 研究不同交易所
+  value_weighted = c(TRUE, FALSE),  # 加权方法
+  sorting_method = c("independent", "dependent"),  # 新增排序方法：独立排序和依赖排序
+  data = parse_exprs(
+    'data_for_sorts; 
+     data_for_sorts %>% filter(date < "1990-06-01");  # 过滤早期数据
+     data_for_sorts %>% filter(date >= "1990-06-01")'  # 过滤1990年后数据
+  )  # 数据筛选
+)
+
+# 计算价值溢价
+p_hacking_setup <- p_hacking_setup %>%
+  mutate(value_premium = pmap(
+    .l = list(
+      n_portfolios,
+      exchanges,
+      value_weighted,
+      data,
+      sorting_method  # 添加 sorting_method 参数
+    ),  
+    .f = ~ compute_portfolio_returns(  # 传递 sorting_method 参数到计算函数
+      n_portfolios = ..1,
+      exchanges = ..2,
+      value_weighted = ..3,
+      data = eval_tidy(..4),
+      sorting_method = ..5
+    )
+  ))
+
+# 使用 map_chr() 函数对整个data进行deparse运算，并输出字符型
+# 然后使用 unnest() 函数将嵌套的数据框 size_premium 展开为宽格式。
+# 最后，使用 arrange() 函数按 size_premium 列的降序排列结果。
+p_hacking_results <- p_hacking_setup %>%
+  mutate(data = map_chr(data, deparse)) %>%  
+  unnest(value_premium) %>%
+  arrange(desc(value_premium))
+
+# 查看结果
+p_hacking_results
+
+# 可视化不同排序方法下的价值溢价
+p_hacking_setup %>%
+  unnest(cols = value_premium) %>%
+  ggplot(aes(x = value_premium, fill = sorting_method)) +
+  geom_histogram(bins = 30, position = "dodge") +
+  labs(
+    title = "Distribution of Value Premium for Different Sorting Methods",
+    x = "Value Premium", y = "Frequency"
+  ) +
+  theme_minimal()
+
+
+```
