@@ -1,6 +1,6 @@
 # Machine Learning and Finance
 
-本学习班实践部分内容着重于学习机器学习知识，并穿插在金融领域的应用
+本学习班参考教材The Elements of Statistical Learning，学习机器学习相关知识，以金融实践为主，理论为辅。
 
 ### 主讲小组
 
