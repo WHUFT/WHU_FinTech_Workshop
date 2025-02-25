@@ -9,6 +9,9 @@
 ### 参考教材
 
 1.主要参考教材 The Elements of Statistical Learning（教材官网：https://hastie.su.domains/ElemStatLearn/）
+
 2. An Introduction to Statistical Learning（ https://www.statlearning.com/ ）
+
 3. 机器学习与社会科学应用，郭峰等著，上海财经大学出版社，2024
+
 4. python经济大数据分析，姚加权、洪永淼著，高等教育出版社，2024
