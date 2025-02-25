@@ -8,7 +8,7 @@
 
 ### 参考教材
 
-1.主要参考教材 The Elements of Statistical Learning（教材官网：https://hastie.su.domains/ElemStatLearn/）
+1. 主要参考教材 The Elements of Statistical Learning（教材官网：https://hastie.su.domains/ElemStatLearn/）
 
 2. An Introduction to Statistical Learning（ https://www.statlearning.com/ ）
 
