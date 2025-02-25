@@ -7,7 +7,6 @@
 2025年(春季)：冯丽璇，赵伟皓，郭康，李子明，王梦涵（组织），赵吕宇佳，程心烨，蔡雨阳
 
 ### 参考教材
-
 1.主要参考教材 The Elements of Statistical Learning（教材官网：https://hastie.su.domains/ElemStatLearn/）
 
 2. An Introduction to Statistical Learning（ https://www.statlearning.com/ ）
