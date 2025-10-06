@@ -1,0 +1,170 @@
+\documentclass[10pt,aspectratio=169,compress,ignorenonframetext]{beamer}
+
+\usepackage[UTF8,noindent]{ctex}
+\newcommand{\filter}[1]{}
+\usefonttheme{serif}              % 使用衬线字体
+\usefonttheme{professionalfonts}  % 数学公式字体
+\usepackage{mathtools}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{verbatim}
+\usepackage{anyfontsize}
+\usepackage{setspace}
+\usepackage{multirow}
+\usepackage[table]{xcolor}
+
+\usepackage[backend=biber,style=chinese-erj,uniquename=false]{biblatex}
+\renewcommand{\parencite}{\cite} % 如果 biblatex-gb7714-2015 较新可删除
+%\addbibresource{macro.bib}
+
+\renewcommand{\baselinestretch}{1.3}
+
+\usepackage{fontspec}
+\mode<presentation>
+{
+\usetheme{Singapore}
+\setbeamercovered{transparent}
+}
+\usepackage{color}
+
+\AtBeginSection[]{
+}
+
+\usepackage{graphicx} % 用于插入图片
+\usepackage{subcaption} % 用于 \subcaption 环境
+
+\makeatletter
+\setbeamertemplate{footline}
+{
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+            \usebeamerfont{author in head/foot}\insertshortauthor
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+            \usebeamerfont{title in head/foot}\insertshorttitle
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+            \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+            \insertframenumber{} / \inserttotalframenumber\hspace*{2ex} 
+        \end{beamercolorbox}
+     }%
+     \vskip 0pt%
+}
+
+%% --> 导言页
+\title[论文名称]{\Huge 拟解读的论文名称，需要保留作者名、期刊名、年（这些必要信息可以换行）}
+
+\author{解读人： XXX}
+\institute{武汉大学金融系}
+
+\date{展示日期}
+ 
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+
+\begin{frame}{一页总结}
+
+建议在标题页时，通过提问的方式启发思考：给定题目，大家会怎么做这个研究？具体来说，给定题目，大家会提出什么样的研究问题、相应的研究假设、研究设计等。
+
+这一页用于总结（可绘图）。
+\end{frame}
+
+
+
+\section{研究问题}
+
+\begin{frame}{研究问题}
+
+这一模块希望达到的学习目标是（ILO1）：How to critically evaluate the quality of a research idea
+
+
+每个部分可以多页，但切勿过多。
+
+第一部分：What are the research questions (summarize in one or two sentences)? 如有必要，可以给出子问题，但不宜过多。
+
+第二部分：Why are the research questions interesting? 这里非常重要，请用条目式列出。切记不能仅用没有人研究过认为值得研究。
+
+第三部分：What is the paper's contribution? 
+\begin{enumerate}
+	\item Find the literature
+	\item Summarize the literature（这一部分一定要有）
+	\item Summarize the marginal contributions to the literature
+\end{enumerate}
+
+\end{frame}
+
+\section{研究假设}
+
+\begin{frame}{研究假设}
+
+这一部分的学习目标（ILO2）： How to develop a testable research hypothesis
+
+第四部分：What hypotheses are tested in the paper? list them explicitly. 用条目式明确地列出。
+
+\begin{enumerate}
+	\item Do these hypotheses follow from and answer the research questions?
+	\item Do these hypotheses follow from theory or are they otherwise adequately developed? Please explain the logic of the hypotheses (use visualization if possible).
+\end{enumerate}
+
+\end{frame}
+
+\section{研究设计}
+
+\begin{frame}{研究设计}
+
+本部分的学习目标（ILO3）：How to create a sound research design to test a research hypothesis。
+
+需要分析如下的部分（可分页）
+
+第五部分：Sample: comment on the appropriateness of the sample selection procedures.
+
+第六部分：Dependent and independent variables: comment on the appropriateness of variable definition and measurement (focus on the key dependent variables and independent variables).
+
+第七部分：Regression/prediction model specification: comment on the appropriateness of the regression/prediction model specification.
+
+\end{frame}
+
+\section{研究结果}
+
+\begin{frame}{研究结果}
+
+本部分的学习目标（ILO4）： How to interpret and communicate the results of the research design
+
+第八部分：What difficulties arise in drawing inferences from the empirical work?
+
+
+针对研究假设，一个个地分析研究结果，是否能够检验研究假设？几个研究假设，几页（如果论文用多个结果回答一个目标，列出来）
+
+ 如这一页，需要列出：研究假设1、模型设定、研究结果（表格或图，并聚焦于研究假设，给出结论：是否检验了没有？有何难点？）
+ 
+ 再下一页，列出：研究假设2、模型设定、研究结果（表格或图，并聚焦于研究假设，给出结论：是否检验了没有？有何难点？）
+
+依次类推。
+
+
+\end{frame}
+
+\section{我的思考}
+
+\begin{frame}{思考}
+
+最后一部分需要给出自己对该论文的思考。这一部分可以在大家讨论之后再给出。
+
+第九部分：Describe at least one publishable and feasible extension of this research. 条目式列出，简要解释。如有可能，列出可能的边际贡献。如有可能，有初步结果更好。
+
+\end{frame}
+
+\section*{附录}
+
+\begin{frame}{附录}
+
+所有其他的东西（未展示的论文结果、复现结果等，参考文献，相关的论文，如后续接着展开的论文等），放在附录中。附录可不讲，仅用于备用，不限页数。
+
+\end{frame}
+
+\end{document} 
